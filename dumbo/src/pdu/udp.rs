@@ -10,6 +10,9 @@
 
 use super::bytes::{InnerBytes, NetworkBytes};
 
+/// The header length is 8 octets (bytes)
+const HEADER_SIZE: usize = 8;
+
 const SOURCE_PORT_OFFSET: usize = 0;
 const DESTINATION_PORT_OFFSET: usize = 2;
 const LENGTH_OFFSET: usize = 4;
