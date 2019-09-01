@@ -25,7 +25,7 @@ pub const ETHERTYPE_ARP: u16 = 0x0806;
 pub const ETHERTYPE_IPV4: u16 = 0x0800;
 
 /// Describes the errors which may occur when handling Ethernet frames.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// The specified byte sequence is shorter than the Ethernet header length.
     SliceTooShort,
@@ -100,6 +100,16 @@ impl<'a, T: NetworkBytes> EthernetFrame<'a, T> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.bytes.len() == 0
+    }
+
+    /// Returns a read-only slice of the underlying frame
+    // TODO this function is added to match make the test works
+    // maybe it'll need to be removed when pnet is completely removed
+    // the other possibility is that we'll need somewhere to put the
+    // bytes on the wire and implement this for NetworkBytes
+    #[inline]
+    pub fn as_raw(&self) -> &[u8] {
+        return &self.bytes;
     }
 }
 

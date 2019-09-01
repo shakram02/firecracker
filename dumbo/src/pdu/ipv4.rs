@@ -27,8 +27,10 @@ const SOURCE_ADDRESS_OFFSET: usize = 12;
 const DESTINATION_ADDRESS_OFFSET: usize = 16;
 const OPTIONS_OFFSET: usize = 20;
 
-const IPV4_VERSION: u8 = 0x04;
-const DEFAULT_TTL: u8 = 200;
+/// Indicates version 4 of the IP protocol
+pub const IPV4_VERSION: u8 = 0x04;
+/// Default TTL value
+pub const DEFAULT_TTL: u8 = 200;
 
 /// The IP protocol number associated with TCP.
 pub const PROTOCOL_TCP: u8 = 0x06;
@@ -37,7 +39,7 @@ pub const PROTOCOL_TCP: u8 = 0x06;
 pub const PROTOCOL_UDP: u8 = 0x11;
 
 /// Describes the errors which may occur while handling IPv4 packets.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// The header checksum is invalid.
     Checksum,
