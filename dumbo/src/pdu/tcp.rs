@@ -212,35 +212,7 @@ impl<'a, T: NetworkBytes> TcpSegment<'a, T> {
     ///
     /// [here]: https://en.wikipedia.org/wiki/Transmission_Control_Protocol#Checksum_computation
     pub fn compute_checksum(&self, src_addr: Ipv4Addr, dst_addr: Ipv4Addr) -> u16 {
-        // TODO: Is u32 enough to prevent overflow for the code in this function? I think so, but it
-        // would be nice to double-check.
-        let mut sum = 0u32;
-
-        let a = u32::from(src_addr);
-        sum += a & 0xffff;
-        sum += a >> 16;
-
-        let b = u32::from(dst_addr);
-        sum += b & 0xffff;
-        sum += b >> 16;
-
-        let len = self.len();
-        sum += u32::from(PROTOCOL_TCP);
-        sum += len as u32;
-
-        for i in 0..len / 2 {
-            sum += u32::from(self.bytes.ntohs_unchecked(i * 2));
-        }
-
-        if len % 2 != 0 {
-            sum += u32::from(self.bytes[len - 1]) << 8;
-        }
-
-        while sum >> 16 != 0 {
-            sum = (sum & 0xffff) + (sum >> 16);
-        }
-
-        !(sum as u16)
+        crate::pdu::compute_checksum(&self.bytes, src_addr, dst_addr, PROTOCOL_TCP)
     }
 
     /// Parses TCP header options (only `MSS` is supported for now).

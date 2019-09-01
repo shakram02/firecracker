@@ -33,6 +33,9 @@ const DEFAULT_TTL: u8 = 200;
 /// The IP protocol number associated with TCP.
 pub const PROTOCOL_TCP: u8 = 0x06;
 
+/// The IP protocol number associated with UDP.
+pub const PROTOCOL_UDP: u8 = 0x11;
+
 /// Describes the errors which may occur while handling IPv4 packets.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum Error {
