@@ -28,12 +28,12 @@ extern crate fc_util;
 extern crate kernel;
 #[macro_use]
 extern crate logger;
+extern crate dumbo;
 extern crate memory_model;
 extern crate net_util;
 extern crate rate_limiter;
 extern crate seccomp;
 extern crate sys_util;
-extern crate dumbo;
 
 /// Syscalls allowed through the seccomp filter.
 pub mod default_syscalls;

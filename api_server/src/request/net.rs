@@ -57,8 +57,8 @@ mod tests {
     extern crate net_util;
     extern crate vmm;
 
-    use dumbo::pdu::mac::MacAddr;
     use super::*;
+    use dumbo::pdu::mac::MacAddr;
 
     use serde_json;
 

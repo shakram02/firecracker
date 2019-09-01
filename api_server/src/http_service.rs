@@ -680,8 +680,8 @@ fn describe(method: &Method, path: &str, body: &Option<String>) -> String {
 mod tests {
     extern crate net_util;
 
-    use dumbo::pdu::mac::MacAddr;
     use super::*;
+    use dumbo::pdu::mac::MacAddr;
 
     use serde_json::{Map, Value};
     use std::path::PathBuf;
