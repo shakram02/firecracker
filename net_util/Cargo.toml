@@ -14,3 +14,4 @@ sys_util = { path = "../sys_util" }
 lazy_static = ">=1.1.0"
 pnet = ">=0.21.0"
 serde_json = ">=1.0.9"
+dumbo = { path = "../dumbo" }

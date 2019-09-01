@@ -33,6 +33,7 @@ extern crate net_util;
 extern crate rate_limiter;
 extern crate seccomp;
 extern crate sys_util;
+extern crate dumbo;
 
 /// Syscalls allowed through the seccomp filter.
 pub mod default_syscalls;
@@ -2113,7 +2114,7 @@ mod tests {
     use self::tempfile::NamedTempFile;
     use arch::DeviceType;
     use devices::virtio::{ActivateResult, MmioDevice, Queue};
-    use net_util::MacAddr;
+    use dumbo::pdu::mac::MacAddr;
     use vmm_config::drive::DriveError;
     use vmm_config::machine_config::CpuFeaturesTemplate;
     use vmm_config::{RateLimiterConfig, TokenBucketConfig};

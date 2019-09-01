@@ -12,7 +12,7 @@ extern crate byteorder;
 extern crate fc_util;
 extern crate logger;
 extern crate mmds;
-extern crate net_util;
+extern crate serde;
 
 pub mod ns;
 pub mod pdu;

@@ -10,13 +10,14 @@
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
+#[cfg(test)]
+extern crate dumbo;
 extern crate libc;
 extern crate serde;
 
 extern crate net_gen;
 extern crate sys_util;
 
-mod mac;
 mod tap;
 
 use std::io::Error as IoError;
@@ -24,7 +25,6 @@ use std::mem;
 use std::net;
 use std::os::unix::io::FromRawFd;
 
-pub use mac::{MacAddr, MAC_ADDR_LEN};
 pub use tap::{Error as TapError, Tap};
 
 #[derive(Debug)]

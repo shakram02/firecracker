@@ -15,6 +15,7 @@ pub mod arp;
 pub mod bytes;
 pub mod ethernet;
 pub mod ipv4;
+pub mod mac;
 pub mod tcp;
 pub mod udp;
 

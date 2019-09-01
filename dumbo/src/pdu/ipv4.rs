@@ -472,7 +472,7 @@ pub fn test_speculative_dst_addr(buf: &[u8], addr: Ipv4Addr) -> bool {
 mod tests {
     use std::fmt;
 
-    use net_util::MacAddr;
+    use pdu::mac::MacAddr;
 
     use super::*;
 

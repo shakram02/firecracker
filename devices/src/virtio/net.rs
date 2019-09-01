@@ -22,11 +22,11 @@ use std::vec::Vec;
 
 use super::super::Error as DeviceError;
 use super::{ActivateError, ActivateResult, Queue, VirtioDevice, TYPE_NET, VIRTIO_MMIO_INT_VRING};
-use dumbo::{ns::MmdsNetworkStack, pdu::ethernet::EthernetFrame};
+use dumbo::{ns::MmdsNetworkStack, pdu::ethernet::EthernetFrame, pdu::mac::MacAddr, pdu::mac::MAC_ADDR_LEN};
 use logger::{Metric, METRICS};
 use memory_model::{GuestAddress, GuestMemory};
 use net_gen;
-use net_util::{MacAddr, Tap, TapError, MAC_ADDR_LEN};
+use net_util::{Tap, TapError};
 use rate_limiter::{RateLimiter, TokenBucket, TokenType};
 use sys_util::EventFd;
 use virtio::EpollConfigConstructor;

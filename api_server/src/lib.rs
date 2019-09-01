@@ -1,6 +1,7 @@
 // Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-
+#[cfg(test)]
+extern crate dumbo;
 extern crate futures;
 extern crate hyper;
 extern crate serde;

@@ -5,19 +5,27 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+//! Contains support for parsing and constructing MAC addresses
+//! More information about MAC addresses can be found [here]
+//!
+//! [here]: https://en.wikipedia.org/wiki/MAC_address
+
 use std::result::Result;
 
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
 
+/// MAC address length (48-bits)
 pub const MAC_ADDR_LEN: usize = 6;
 
+/// Represents a MAC address
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MacAddr {
     bytes: [u8; MAC_ADDR_LEN],
 }
 
 impl MacAddr {
+    /// Constructs a MacAddr from the given string
     // The error contains the str that failed to be parsed, for nicer error message generation.
     pub fn parse_str<S>(s: &S) -> Result<MacAddr, &str>
     where
@@ -40,6 +48,7 @@ impl MacAddr {
         Ok(MacAddr { bytes })
     }
 
+    /// Interprets the given array to a MacAddr without any checks
     // Does not check whether src.len() == MAC_ADDR_LEN.
     #[inline]
     pub fn from_bytes_unchecked(src: &[u8]) -> MacAddr {
@@ -51,6 +60,7 @@ impl MacAddr {
         MacAddr { bytes }
     }
 
+    /// Interprets the given array to a MacAddr
     // An error can only occur if the slice length is different from MAC_ADDR_LEN.
     #[inline]
     pub fn from_bytes(src: &[u8]) -> Result<MacAddr, ()> {
@@ -60,11 +70,13 @@ impl MacAddr {
         Ok(MacAddr::from_bytes_unchecked(src))
     }
 
+    /// Gets the MAC address as a byte array
     #[inline]
     pub fn get_bytes(&self) -> &[u8] {
         &self.bytes
     }
 
+    /// Formats the MAC address to a string
     pub fn to_string(self) -> String {
         let b = &self.bytes;
         format!(

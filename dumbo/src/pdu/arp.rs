@@ -16,7 +16,7 @@ use std::result::Result;
 
 use super::bytes::{InnerBytes, NetworkBytes, NetworkBytesMut};
 use super::ethernet::{self, ETHERTYPE_IPV4};
-use net_util::{MacAddr, MAC_ADDR_LEN};
+use super::mac::{MacAddr, MAC_ADDR_LEN};
 
 const HTYPE_OFFSET: usize = 0;
 const HTYPE_ETHERNET: u16 = 0x0001;

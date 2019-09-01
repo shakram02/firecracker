@@ -8,7 +8,7 @@ use std::result::Result;
 
 use super::bytes::{InnerBytes, NetworkBytes, NetworkBytesMut};
 use super::Incomplete;
-use net_util::MacAddr;
+use pdu::mac::MacAddr;
 
 const DST_MAC_OFFSET: usize = 0;
 const SRC_MAC_OFFSET: usize = 6;
