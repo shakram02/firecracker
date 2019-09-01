@@ -16,22 +16,20 @@ use pdu::Incomplete;
 
 use super::bytes::{InnerBytes, NetworkBytes};
 
-/// The header length is 8 octets (bytes)
-const HEADER_SIZE: usize = 8;
-
 const SOURCE_PORT_OFFSET: usize = 0;
 const DESTINATION_PORT_OFFSET: usize = 2;
 const LENGTH_OFFSET: usize = 4;
 const CHECKSUM_OFFSET: usize = 6;
-/// Payload offset also denotes the header size
 const PAYLOAD_OFFSET: usize = 8;
+/// The header length is 8 octets (bytes)
+pub const UDP_HEADER_SIZE: usize = 8;
 
 // A UDP datagram is carried in a single IP packet and is hence limited
 // to a maximum payload of 65,507 bytes for IPv4 and 65,527 bytes for IPv6 [2]
 const IPV4_MAX_UDP_PACKET_SIZE: usize = 65507;
 
 /// Represents errors which may occur while parsing or writing a datagram.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// Invalid checksum
     Checksum,
@@ -55,7 +53,7 @@ impl<'a, T: NetworkBytes> UdpDatagram<'a, T> {
     ///  This method does not panic, but further method calls on the resulting object may panic if
     /// `bytes` contains invalid input.
     #[inline]
-    fn from_bytes_unchecked(bytes: T) -> Self {
+    pub fn from_bytes_unchecked(bytes: T) -> Self {
         UdpDatagram {
             bytes: InnerBytes::new(bytes),
         }
@@ -64,8 +62,11 @@ impl<'a, T: NetworkBytes> UdpDatagram<'a, T> {
     /// Interprets `bytes` as a UDP datagram if possible or returns
     /// the reason for failing to do so
     #[inline]
-    fn from_bytes(bytes: T, verify_checksum: Option<(Ipv4Addr, Ipv4Addr)>) -> Result<Self, Error> {
-        if bytes.len() < PAYLOAD_OFFSET {
+    pub fn from_bytes(
+        bytes: T,
+        verify_checksum: Option<(Ipv4Addr, Ipv4Addr)>,
+    ) -> Result<Self, Error> {
+        if bytes.len() < UDP_HEADER_SIZE {
             return Err(Error::DatagramTooShort);
         }
 
@@ -96,7 +97,7 @@ impl<'a, T: NetworkBytes> UdpDatagram<'a, T> {
 
     /// Returns the length of the datagram from its header
     #[inline]
-    pub fn length(&self) -> u16 {
+    pub fn len(&self) -> u16 {
         self.bytes.ntohs_unchecked(LENGTH_OFFSET)
     }
 
@@ -130,13 +131,13 @@ impl<'a, T: NetworkBytesMut> UdpDatagram<'a, T> {
     /// * `dst_port` - Destination port
     /// * `payload` - Datagram payload
     #[inline] // TODO remove inlining?
-    fn write_incomplete_datagram(buf: T, payload: &[u8]) -> Result<Incomplete<Self>, Error> {
+    pub fn write_incomplete_datagram(buf: T, payload: &[u8]) -> Result<Incomplete<Self>, Error> {
         let mut packet = match UdpDatagram::from_bytes(buf, None) {
             Ok(packet) => packet,
             Err(e) => return Err(e),
         };
 
-        let len = payload.len() + PAYLOAD_OFFSET;
+        let len = payload.len() + UDP_HEADER_SIZE;
 
         // TODO working with IPv4 only for now
         if len > IPV4_MAX_UDP_PACKET_SIZE {
@@ -144,21 +145,21 @@ impl<'a, T: NetworkBytesMut> UdpDatagram<'a, T> {
         }
 
         packet.bytes.shrink_unchecked(len as usize);
-        packet.set_payload(payload).set_length(len as u16);
+        packet.set_payload(payload).set_len(len as u16);
 
         Ok(Incomplete::new(packet))
     }
 
     /// Sets the source port of the UDP data gram
     #[inline]
-    fn set_source_port(&mut self, src_port: u16) -> &mut Self {
+    pub fn set_source_port(&mut self, src_port: u16) -> &mut Self {
         self.bytes.htons_unchecked(SOURCE_PORT_OFFSET, src_port);
         self
     }
 
     /// Sets the destination port of the UDP data gram
     #[inline]
-    fn set_destination_port(&mut self, dst_port: u16) -> &mut Self {
+    pub fn set_destination_port(&mut self, dst_port: u16) -> &mut Self {
         self.bytes
             .htons_unchecked(DESTINATION_PORT_OFFSET, dst_port);
         self
@@ -166,21 +167,21 @@ impl<'a, T: NetworkBytesMut> UdpDatagram<'a, T> {
 
     /// Sets the payload of the UDP datagram
     #[inline]
-    fn set_payload(&mut self, payload: &[u8]) -> &mut Self {
+    pub fn set_payload(&mut self, payload: &[u8]) -> &mut Self {
         self.bytes[PAYLOAD_OFFSET..].copy_from_slice(payload);
         self
     }
 
     /// Sets the length field in the UDP datagram header
     #[inline]
-    fn set_length(&mut self, len: u16) -> &mut Self {
+    pub fn set_len(&mut self, len: u16) -> &mut Self {
         self.bytes.htons_unchecked(LENGTH_OFFSET, len);
         self
     }
 
     /// Sets the checksum of a UDP datagram
     #[inline]
-    fn set_checksum(&mut self, checksum: u16) -> &mut Self {
+    pub fn set_checksum(&mut self, checksum: u16) -> &mut Self {
         self.bytes.htons_unchecked(CHECKSUM_OFFSET, checksum);
         self
     }
@@ -243,17 +244,17 @@ mod tests {
         p.set_destination_port(dst_port);
         assert_eq!(p.destination_port(), dst_port);
 
-        assert_eq!(p.length(), 0);
+        assert_eq!(p.len(), 0);
         let len = 12;
-        p.set_length(len);
-        assert_eq!(p.length(), len);
+        p.set_len(len);
+        assert_eq!(p.len(), len);
 
         assert_eq!(p.checksum(), 0);
         let checksum: u16 = 32;
         p.set_checksum(32);
         assert_eq!(p.checksum(), checksum);
 
-        let payload_length = total_len - PAYLOAD_OFFSET;
+        let payload_length = total_len - UDP_HEADER_SIZE;
         assert_eq!(p.payload().len(), payload_length);
 
         let payload: Vec<u8> = (0..(payload_length as u8)).collect();
@@ -271,7 +272,7 @@ mod tests {
             Error::PayloadTooBig
         );
 
-        let mut short_header = [0u8; super::PAYLOAD_OFFSET - 1];
+        let mut short_header = [0u8; UDP_HEADER_SIZE - 1];
         assert_eq!(
             UdpDatagram::from_bytes(short_header.as_mut(), None).unwrap_err(),
             Error::DatagramTooShort
@@ -280,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_construction() {
-        let mut packet = [0u8; 32 + super::PAYLOAD_OFFSET]; // 32-byte payload
+        let mut packet = [0u8; 32 + UDP_HEADER_SIZE]; // 32-byte payload
         let payload: Vec<u8> = (0..32).collect();
         let src_port = 32133;
         let dst_port = 22113;
