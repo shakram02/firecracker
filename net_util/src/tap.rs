@@ -364,20 +364,23 @@ mod tests {
         eth.set_dst_mac(dst_mac);
         eth.set_ethertype(ETHERTYPE_IPV4);
 
-        let mut ipv4 = IPv4Packet::from_bytes_unchecked(eth.payload_mut());
-        let ip_header_len_bytes = 20;
-        ipv4.set_version_and_header_len(IPV4_VERSION, ip_header_len_bytes);
-        ipv4.set_total_len((ip_header_len_bytes + UDP_HEADER_SIZE + payload.len()) as u16);
-        ipv4.set_ttl(DEFAULT_TTL);
-        ipv4.set_protocol(PROTOCOL_UDP);
-        ipv4.set_source_address(Ipv4Addr::new(192, 168, 241, 1));
-        ipv4.set_destination_address(Ipv4Addr::new(192, 168, 241, 2));
+        // Because we're borrowing eth as mutable
+        {
+            let mut ipv4 = IPv4Packet::from_bytes_unchecked(eth.payload_mut());
+            let ip_header_len_bytes = 20;
+            ipv4.set_version_and_header_len(IPV4_VERSION, ip_header_len_bytes);
+            ipv4.set_total_len((ip_header_len_bytes + UDP_HEADER_SIZE + payload.len()) as u16);
+            ipv4.set_ttl(DEFAULT_TTL);
+            ipv4.set_protocol(PROTOCOL_UDP);
+            ipv4.set_source_address(Ipv4Addr::new(192, 168, 241, 1));
+            ipv4.set_destination_address(Ipv4Addr::new(192, 168, 241, 2));
 
-        let mut udp = UdpDatagram::from_bytes(ipv4.payload_mut(), None).unwrap();
-        udp.set_source_port(1000);
-        udp.set_destination_port(1001);
-        udp.set_len((UDP_HEADER_SIZE + payload.len()) as u16);
-        udp.set_payload(payload);
+            let mut udp = UdpDatagram::from_bytes(ipv4.payload_mut(), None).unwrap();
+            udp.set_source_port(1000);
+            udp.set_destination_port(1001);
+            udp.set_len((UDP_HEADER_SIZE + payload.len()) as u16);
+            udp.set_payload(payload);
+        }
 
         buf.copy_from_slice(eth.as_raw()); // Copy the raw data by the buf of pnet
     }
