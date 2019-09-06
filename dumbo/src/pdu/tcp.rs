@@ -8,7 +8,6 @@
 //! [Here]: https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_segment_structure
 
 use std::cmp::min;
-use std::convert::From;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::result::Result;

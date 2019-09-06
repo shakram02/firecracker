@@ -101,6 +101,12 @@ impl<'a, T: NetworkBytes> UdpDatagram<'a, T> {
         self.bytes.ntohs_unchecked(LENGTH_OFFSET)
     }
 
+    /// Checks if the datagram is empty
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.len() == 0
+    }
+
     /// Returns the checksum value of the packet
     #[inline]
     pub fn checksum(&self) -> u16 {
@@ -190,7 +196,7 @@ impl<'a, T: NetworkBytesMut> UdpDatagram<'a, T> {
 impl<'a, T: NetworkBytesMut> Incomplete<UdpDatagram<'a, T>> {
     /// Transforms `self` into a `UdpDatagram<T>` by specifying values for the `source port`,
     /// `destination port`, and (optionally) the information required to compute the checksum.
-    fn finalize(
+    pub fn finalize(
         mut self,
         src_port: u16,
         dst_port: u16,
