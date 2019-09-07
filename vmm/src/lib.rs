@@ -69,8 +69,7 @@ use device_manager::mmio::MMIODeviceInfo;
 use device_manager::mmio::MMIODeviceManager;
 use devices::legacy::I8042DeviceError;
 use devices::virtio;
-#[cfg(feature = "vsock")]
-use devices::virtio::vhost::{handle::VHOST_EVENTS_COUNT, TYPE_VSOCK};
+use devices::virtio::vsock::{TYPE_VSOCK, VSOCK_EVENTS_COUNT};
 use devices::virtio::EpollConfigConstructor;
 use devices::virtio::{BLOCK_EVENTS_COUNT, TYPE_BLOCK};
 use devices::virtio::{NET_EVENTS_COUNT, TYPE_NET};
@@ -96,7 +95,6 @@ use vmm_config::net::{
     NetworkInterfaceConfig, NetworkInterfaceConfigs, NetworkInterfaceError,
     NetworkInterfaceUpdateConfig,
 };
-#[cfg(feature = "vsock")]
 use vmm_config::vsock::{VsockDeviceConfig, VsockDeviceConfigs, VsockError};
 use vstate::{Vcpu, Vm};
 
@@ -225,7 +223,6 @@ pub enum VmmActionError {
     /// The action `SendCtrlAltDel` failed. Details are provided by the device-specific error
     /// `I8042DeviceError`.
     SendCtrlAltDel(ErrorKind, I8042DeviceError),
-    #[cfg(feature = "vsock")]
     /// The action `insert_vsock_device` failed either because of bad user input (`ErrorKind::User`)
     /// or an internal error (`ErrorKind::Internal`).
     VsockConfig(ErrorKind, VsockError),
@@ -308,10 +305,9 @@ impl std::convert::From<StartMicrovmError> for VmmActionError {
 
         let kind = match e {
             // User errors.
-            #[cfg(feature = "vsock")]
-            CreateVsockDevice(_) => ErrorKind::User,
             CreateBlockDevice(_)
             | CreateNetDevice(_)
+            | CreateVsockDevice
             | KernelCmdline(_)
             | KernelLoader(_)
             | MicroVMAlreadyRunning
@@ -320,8 +316,6 @@ impl std::convert::From<StartMicrovmError> for VmmActionError {
             | OpenBlockDevice(_)
             | VcpusNotConfigured => ErrorKind::User,
             // Internal errors.
-            #[cfg(feature = "vsock")]
-            RegisterVsockDevice(_) => ErrorKind::Internal,
             ConfigureSystem(_)
             | ConfigureVm(_)
             | CreateRateLimiter(_)
@@ -333,6 +327,7 @@ impl std::convert::From<StartMicrovmError> for VmmActionError {
             | RegisterEvent
             | RegisterMMIODevice(_)
             | RegisterNetDevice(_)
+            | RegisterVsockDevice(_)
             | SeccompFilters(_)
             | Vcpu(_)
             | VcpuConfigure(_)
@@ -360,7 +355,6 @@ impl VmmActionError {
             NetworkConfig(ref kind, _) => kind,
             StartMicrovm(ref kind, _) => kind,
             SendCtrlAltDel(ref kind, _) => kind,
-            #[cfg(feature = "vsock")]
             VsockConfig(ref kind, _) => kind,
         }
     }
@@ -378,7 +372,6 @@ impl Display for VmmActionError {
             NetworkConfig(_, ref err) => err,
             StartMicrovm(_, ref err) => err,
             SendCtrlAltDel(_, ref err) => err,
-            #[cfg(feature = "vsock")]
             VsockConfig(_, ref err) => err,
         };
 
@@ -411,7 +404,6 @@ pub enum VmmAction {
     /// `NetworkInterfaceConfig` as input. This action can only be called before the microVM has
     /// booted. The response is sent using the `OutcomeSender`.
     InsertNetworkDevice(NetworkInterfaceConfig, OutcomeSender),
-    #[cfg(feature = "vsock")]
     /// Add a new vsock device or update one that already exists using the
     /// `VsockDeviceConfig` as input. This action can only be called before the microVM has
     /// booted. The response is sent using the `OutcomeSender`.
@@ -777,7 +769,6 @@ struct Vmm {
     // This is necessary because we want the root to always be mounted on /dev/vda.
     block_device_configs: BlockDeviceConfigs,
     network_interface_configs: NetworkInterfaceConfigs,
-    #[cfg(feature = "vsock")]
     vsock_device_configs: VsockDeviceConfigs,
 
     epoll_context: EpollContext,
@@ -833,7 +824,6 @@ impl Vmm {
             legacy_device_manager: LegacyDeviceManager::new().map_err(Error::CreateLegacyDevice)?,
             block_device_configs,
             network_interface_configs: NetworkInterfaceConfigs::new(),
-            #[cfg(feature = "vsock")]
             vsock_device_configs: VsockDeviceConfigs::new(),
             epoll_context,
             api_event_fd,
@@ -1004,41 +994,42 @@ impl Vmm {
         Ok(())
     }
 
-    #[cfg(feature = "vsock")]
-    fn attach_vsock_devices(
-        &mut self,
-        guest_mem: &GuestMemory,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        use StartMicrovmError::*;
-
-        let kernel_config = self.kernel_config.as_mut().ok_or(MissingKernelConfig)?;
-
+    fn attach_vsock_devices(&mut self) -> std::result::Result<(), StartMicrovmError> {
+        let kernel_config = self
+            .kernel_config
+            .as_mut()
+            .ok_or(StartMicrovmError::MissingKernelConfig)?;
         // `unwrap` is suitable for this context since this should be called only after the
         // device manager has been initialized.
         let device_manager = self.mmio_device_manager.as_mut().unwrap();
 
         for cfg in self.vsock_device_configs.iter() {
+            let backend = devices::virtio::vsock::VsockUnixBackend::new(
+                u64::from(cfg.guest_cid),
+                cfg.uds_path.clone(),
+            )
+            .map_err(|_| StartMicrovmError::CreateVsockDevice)?;
+
             let epoll_config = self.epoll_context.allocate_tokens_for_virtio_device(
                 TYPE_VSOCK,
-                &cfg.id,
-                VHOST_EVENTS_COUNT,
+                &cfg.vsock_id,
+                VSOCK_EVENTS_COUNT,
             );
-
             let vsock_box = Box::new(
-                devices::virtio::Vsock::new(u64::from(cfg.guest_cid), guest_mem, epoll_config)
-                    .map_err(CreateVsockDevice)?,
+                devices::virtio::Vsock::new(u64::from(cfg.guest_cid), epoll_config, backend)
+                    .or(Err(StartMicrovmError::CreateVsockDevice))?,
             );
-
             device_manager
                 .register_virtio_device(
                     self.vm.get_fd(),
                     vsock_box,
                     &mut kernel_config.cmdline,
                     TYPE_VSOCK,
-                    &cfg.id,
+                    &cfg.vsock_id,
                 )
-                .map_err(RegisterVsockDevice)?;
+                .map_err(StartMicrovmError::RegisterVsockDevice)?;
         }
+
         Ok(())
     }
 
@@ -1130,16 +1121,7 @@ impl Vmm {
 
         self.attach_block_devices()?;
         self.attach_net_devices()?;
-        #[cfg(feature = "vsock")]
-        {
-            let guest_mem = self
-                .guest_memory
-                .clone()
-                .ok_or(StartMicrovmError::GuestMemory(
-                    memory_model::GuestMemoryError::MemoryNotInitialized,
-                ))?;
-            self.attach_vsock_devices(&guest_mem)?;
-        }
+        self.attach_vsock_devices()?;
 
         Ok(())
     }
@@ -1777,7 +1759,6 @@ impl Vmm {
         Ok(VmmData::Empty)
     }
 
-    #[cfg(feature = "vsock")]
     fn insert_vsock_device(
         &mut self,
         body: VsockDeviceConfig,
@@ -1977,7 +1958,6 @@ impl Vmm {
             InsertNetworkDevice(netif_body, sender) => {
                 Vmm::send_response(self.insert_net_device(netif_body), sender);
             }
-            #[cfg(feature = "vsock")]
             InsertVsockDevice(vsock_cfg, sender) => {
                 Vmm::send_response(self.insert_vsock_device(vsock_cfg), sender);
             }
@@ -3456,6 +3436,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_start_microvm_error_conversion_cl() {
         // Test `StartMicrovmError` conversion
         #[cfg(target_arch = "x86_64")]
@@ -3491,11 +3472,8 @@ mod tests {
             )),
             ErrorKind::Internal
         );
-        #[cfg(feature = "vsock")]
         assert_eq!(
-            error_kind(StartMicrovmError::CreateVsockDevice(
-                devices::virtio::vhost::Error::PollError(io::Error::from_raw_os_error(0))
-            )),
+            error_kind(StartMicrovmError::CreateVsockDevice),
             ErrorKind::User
         );
         assert_eq!(
@@ -3581,7 +3559,6 @@ mod tests {
             )),
             ErrorKind::Internal
         );
-        #[cfg(feature = "vsock")]
         assert_eq!(
             error_kind(StartMicrovmError::RegisterVsockDevice(
                 device_manager::mmio::Error::IrqsExhausted
@@ -3617,6 +3594,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_error_messages() {
         // Enum `Error`
 
@@ -3767,7 +3745,6 @@ mod tests {
                 .kind(),
             &ErrorKind::User
         );
-        #[cfg(feature = "vsock")]
         assert_eq!(
             format!(
                 "{:?}",

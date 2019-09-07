@@ -1,6 +1,6 @@
 [package]
 name = "firecracker"
-version = "0.17.0"
+version = "0.18.0"
 authors = ["Amazon Firecracker team <firecracker-devel@amazon.com>"]
 
 [dependencies]
@@ -24,8 +24,5 @@ panic = "abort"
 [profile.release]
 lto = true
 panic = "abort"
-
-[features]
-vsock = ["api_server/vsock", "jailer/vsock"]
 
 [workspace]
