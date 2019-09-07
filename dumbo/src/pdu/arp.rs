@@ -18,17 +18,23 @@ use super::bytes::{InnerBytes, NetworkBytes, NetworkBytesMut};
 use super::ethernet::{self, ETHERTYPE_IPV4};
 use super::mac::{MacAddr, MAC_ADDR_LEN};
 
-const HTYPE_OFFSET: usize = 0;
-const HTYPE_ETHERNET: u16 = 0x0001;
+/// ARP Request operation
+pub const OPER_REQUEST: u16 = 0x0001;
 
+/// ARP Reply operation
+pub const OPER_REPLY: u16 = 0x0002;
+
+/// ARP is for Ethernet hardware
+pub const HTYPE_ETHERNET: u16 = 0x0001;
+
+/// The length of an ARP frame for IPv4 over Ethernet.
+pub const ETH_IPV4_FRAME_LEN: usize = 28;
+
+const HTYPE_OFFSET: usize = 0;
 const PTYPE_OFFSET: usize = 2;
 const HLEN_OFFSET: usize = 4;
 const PLEN_OFFSET: usize = 5;
-
 const OPER_OFFSET: usize = 6;
-const OPER_REQUEST: u16 = 0x0001;
-const OPER_REPLY: u16 = 0x0002;
-
 const SHA_OFFSET: usize = 8;
 
 // The following constants are specific to ARP requests/responses
@@ -39,11 +45,8 @@ const ETH_IPV4_TPA_OFFSET: usize = 24;
 
 const IPV4_ADDR_LEN: usize = 4;
 
-/// The length of an ARP frame for IPv4 over Ethernet.
-pub const ETH_IPV4_FRAME_LEN: usize = 28;
-
 /// Represents errors which may occur while parsing or writing a frame.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// Invalid hardware address length.
     HLen,
