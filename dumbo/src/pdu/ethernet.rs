@@ -17,7 +17,8 @@ const ETHERTYPE_OFFSET: usize = 12;
 // We don't support 802.1Q tags.
 // TODO: support 802.1Q tags?! If so, don't forget to change the speculative_test_* functions
 // for ARP and IPv4.
-pub(super) const PAYLOAD_OFFSET: usize = 14;
+/// Payload offset in an ethernet frame
+pub const PAYLOAD_OFFSET: usize = 14;
 
 /// Ethertype value for ARP frames.
 pub const ETHERTYPE_ARP: u16 = 0x0806;
@@ -100,16 +101,6 @@ impl<'a, T: NetworkBytes> EthernetFrame<'a, T> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.bytes.len() == 0
-    }
-
-    /// Returns a read-only slice of the underlying frame
-    // TODO this function is added to match make the test works
-    // maybe it'll need to be removed when pnet is completely removed
-    // the other possibility is that we'll need somewhere to put the
-    // bytes on the wire and implement this for NetworkBytes
-    #[inline]
-    pub fn as_raw(&self) -> &[u8] {
-        return &self.bytes;
     }
 }
 
