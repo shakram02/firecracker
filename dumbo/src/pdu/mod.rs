@@ -88,7 +88,7 @@ fn compute_checksum(
     sum += b >> 16;
 
     let len = bytes.len();
-    sum += u32::from(PROTOCOL_TCP);
+    sum += u32::from(protocol);
     sum += len as u32;
 
     for i in 0..len / 2 {

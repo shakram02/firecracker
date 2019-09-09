@@ -296,6 +296,9 @@ mod tests {
         let p = UdpDatagram::write_incomplete_datagram(packet.as_mut(), &payload[..]).unwrap();
         let mut p = p.finalize(src_port, dst_port, Some((src_addr, dst_addr)));
 
+        // TODO: checksum tests are probably broken, the test
+        // passed while the PROTOCOL_TCP variable was incorrectly set in mod.rs,
+        // which yielded a bad checksum (detected by wireshark)
         let checksum = p.checksum();
         p.set_checksum(0);
         let computed_checksum = p.compute_checksum(src_addr, dst_addr);
