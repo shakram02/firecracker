@@ -11,10 +11,12 @@ use std::net;
 use std::os::raw::*;
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
-use super::{create_sockaddr, create_socket, Error as NetUtilError};
 use libc;
+
 use net_gen;
 use sys_util::{ioctl_with_mut_ref, ioctl_with_ref, ioctl_with_val};
+
+use super::{create_sockaddr, create_socket, Error as NetUtilError};
 
 #[derive(Debug)]
 pub enum Error {
@@ -256,14 +258,17 @@ impl AsRawFd for Tap {
 mod tests {
     extern crate pnet;
 
-    use std::net::{Ipv4Addr, UdpSocket};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::io::Read;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddrV4, UdpSocket};
+    use std::path::Path;
     use std::str;
+    use std::str::FromStr;
     use std::sync::{mpsc, Mutex};
     use std::thread;
     use std::time::Duration;
 
-    use self::pnet::datalink::Channel::Ethernet;
-    use self::pnet::datalink::{self, DataLinkReceiver, DataLinkSender, NetworkInterface};
     use dumbo::pdu::arp::{EthIPv4ArpFrame, ETH_IPV4_FRAME_LEN};
     use dumbo::pdu::ethernet::{EthernetFrame, ETHERTYPE_ARP, ETHERTYPE_IPV4, PAYLOAD_OFFSET};
     use dumbo::pdu::ipv4::{IPv4Packet, DEFAULT_TTL, IPV4_VERSION, PROTOCOL_UDP};
@@ -272,8 +277,14 @@ mod tests {
 
     use super::*;
 
+    use self::pnet::datalink::Channel::Ethernet;
+    use self::pnet::datalink::{self, DataLinkReceiver, DataLinkSender, NetworkInterface};
+
     static DATA_STRING: &str = "test for tap";
     static SUBNET_MASK: &str = "255.255.255.0";
+    const HOST_IP_ADDRESS: &str = "192.168.1.107";
+    const VIRTUAL_HOST_IP_ADDRESS: &str = "192.168.1.109";
+    const TAP_IP_ADDRESS: &str = "192.168.1.108";
     // We skip the first 10 bytes because the IFF_VNET_HDR flag is set when the interface
     // is created, and the legacy header is 10 bytes long without a certain flag which
     // is not set in Tap::new().
@@ -287,7 +298,7 @@ mod tests {
     // each time.
     // TODO: get the host's IP
     lazy_static! {
-        static ref TAP_IP_LOCK: Mutex<&'static str> = Mutex::new("192.168.1.115");
+        static ref TAP_IP_LOCK: Mutex<&'static str> = Mutex::new(TAP_IP_ADDRESS);
     }
 
     // Describes the outcomes we are currently interested in when parsing a packet (we use
@@ -353,31 +364,6 @@ mod tests {
         str::from_utf8(&tap.if_name[..null_pos])
             .unwrap()
             .to_string()
-    }
-
-    // Given a buffer of appropriate size, this fills in the relevant fields based on the
-    // provided information. Payload refers to the UDP payload.
-    fn pnet_build_packet(buf: &mut [u8], dst_mac: MacAddr, payload: &[u8]) {
-        let mut eth = EthernetFrame::from_bytes(buf).unwrap();
-
-        let src_mac = MacAddr::from_bytes(&[0x06, 0, 0, 0, 0, 0]).unwrap();
-        eth.set_src_mac(src_mac);
-        eth.set_dst_mac(dst_mac);
-        eth.set_ethertype(ETHERTYPE_IPV4);
-
-        let mut ipv4 = IPv4Packet::from_bytes_unchecked(eth.payload_mut());
-        let ip_header_len_bytes = 20;
-        ipv4.set_version_and_header_len(IPV4_VERSION, ip_header_len_bytes);
-        ipv4.set_total_len((ip_header_len_bytes + UDP_HEADER_SIZE + payload.len()) as u16);
-        ipv4.set_ttl(DEFAULT_TTL);
-        ipv4.set_protocol(PROTOCOL_UDP);
-        ipv4.set_source_address(Ipv4Addr::new(192, 168, 241, 1));
-        ipv4.set_destination_address(Ipv4Addr::new(192, 168, 241, 2));
-
-        let src_port = 1000;
-        let dst_port = 1001;
-        let udp = UdpDatagram::write_incomplete_datagram(ipv4.payload_mut(), payload).unwrap();
-        udp.finalize(src_port, dst_port, None);
     }
 
     // For a given interface name, this returns a tuple that contains the MAC address of the
@@ -502,7 +488,7 @@ mod tests {
         let udp_dst_port = 44445;
 
         // TODO: figure out host's IP address to use it
-        let udp_socket_addr = format!("{}:{}", "192.168.1.107", udp_src_port);
+        let udp_socket_addr = format!("{}:{}", HOST_IP_ADDRESS, udp_src_port);
         let socket = UdpSocket::bind(udp_socket_addr).expect("Failed to bind UDP socket");
         // Now we want to set the target address to something that's near the IP address
         // of the TAP (within its subnet) so the OS will think that the TAP is the next hop
@@ -571,6 +557,84 @@ mod tests {
         assert!(found_packet_sz.is_some());
     }
 
+    // Given a buffer of appropriate size, this fills in the relevant fields based on the
+    // provided information. Payload refers to the UDP payload.
+    fn pnet_build_packet(
+        buf: &mut [u8],
+        src_mac: MacAddr,
+        dst_mac: MacAddr,
+        payload: &[u8],
+        src_addr: &SocketAddrV4,
+        dst_addr: &SocketAddrV4,
+    ) {
+        let mut eth = EthernetFrame::from_bytes(buf).unwrap();
+
+        //        let src_mac = MacAddr::from_bytes(&[0x06, 0, 0, 0, 0, 0]).unwrap();
+        eth.set_src_mac(src_mac);
+        eth.set_dst_mac(dst_mac);
+        eth.set_ethertype(ETHERTYPE_IPV4);
+
+        //        let mut ipv4 = IPv4Packet::from_bytes_unchecked(eth.payload_mut());
+        let ip_header_len_bytes = 20; // 20 bytes for header (min length)
+
+        //        ipv4.set_version_and_header_len(IPV4_VERSION, ip_header_len_bytes);
+        //        ipv4.set_total_len((ip_header_len_bytes + UDP_HEADER_SIZE + payload.len()) as u16);
+        //        ipv4.set_ttl(DEFAULT_TTL);
+        //        ipv4.set_protocol(PROTOCOL_UDP);
+        //
+        //        ipv4.set_source_address(*src_addr.ip());
+        //        ipv4.set_destination_address(*dst_addr.ip());
+        //        let checksum = ipv4.compute_checksum();
+        let mut ipv4 = IPv4Packet::write_header(
+            eth.payload_mut(),
+            PROTOCOL_UDP,
+            *src_addr.ip(),
+            *dst_addr.ip(),
+        )
+        .unwrap()
+        .with_header_and_payload_len_unchecked(
+            ip_header_len_bytes,             // IHL = 5
+            UDP_HEADER_SIZE + payload.len(), // Udp packet
+            true,
+        );
+
+        let udp = UdpDatagram::write_incomplete_datagram(ipv4.payload_mut(), payload).unwrap();
+        let mut udp = udp.finalize(
+            src_addr.port(),
+            dst_addr.port(),
+            Some((*src_addr.ip(), *dst_addr.ip())),
+        );
+    }
+
+    fn get_macs() -> HashMap<String, String> {
+        // cat the /sys/class/net/iface/address to get the MAC
+        // based on: https://stackoverflow.com/questions/26346575/how-to-get-mac-address-in-rust
+        let net = Path::new("/sys/class/net");
+        let entry = fs::read_dir(net).expect("Error");
+        let ifaces = entry
+            .filter_map(|p| p.ok())
+            .map(|p| p.path().file_name().expect("Error").to_os_string())
+            .filter_map(|s| s.into_string().ok())
+            .collect::<Vec<String>>();
+
+        let macs: Vec<String> = ifaces
+            .iter()
+            .map(|iface| net.join(iface.as_str()).join("address"))
+            .map(|addr_path| fs::File::open(addr_path).unwrap())
+            .map(|mut addr_file| {
+                let mut macaddr = String::new();
+                addr_file.read_to_string(&mut macaddr).unwrap();
+                macaddr.trim_end().to_string()
+            })
+            .collect();
+        let mut iface_mac = HashMap::new();
+        for (key, value) in ifaces.into_iter().zip(macs) {
+            println!("iface {} [{}]", key, value);
+            iface_mac.insert(key, value);
+        }
+        iface_mac
+    }
+
     #[test]
     fn test_write() {
         let tap_ip_guard = TAP_IP_LOCK.lock().unwrap();
@@ -579,36 +643,61 @@ mod tests {
         tap.set_ip_addr((*tap_ip_guard).parse().unwrap()).unwrap();
         tap.set_netmask(SUBNET_MASK.parse().unwrap()).unwrap();
         tap.enable().unwrap();
-
-        let (mac, _, mut rx) = pnet_get_mac_tx_rx(tap_name_to_string(&tap));
-
+        let tap_name = tap_name_to_string(&tap);
+        let (mac, _, mut rx) = pnet_get_mac_tx_rx(tap_name.clone());
         let payload = DATA_STRING.as_bytes();
+
+        let packet_src_port = 44444;
+        let packet_src_addr = SocketAddrV4::new(
+            Ipv4Addr::from_str(VIRTUAL_HOST_IP_ADDRESS).unwrap(),
+            packet_src_port,
+        );
+
+        let packet_dst_port = 44448;
+        let packet_dst_addr = SocketAddrV4::new(
+            Ipv4Addr::from_str(HOST_IP_ADDRESS).unwrap(),
+            packet_dst_port,
+        );
+
+        let iface_macs = get_macs();
+
+        // &iface_macs.get(&tap_name).unwrap()
+        let src_mac = MacAddr::parse_str("06:00:C0:A8:F1:02").unwrap();
+        let dst_iface_name = "enp5s0";
+        let dst_mac = MacAddr::parse_str(&iface_macs.get(dst_iface_name).unwrap()).unwrap();
 
         // vnet hdr + eth hdr + ip hdr + udp hdr + payload len
         let buf_size = 10 + 14 + 20 + 8 + payload.len();
 
         let mut buf = vec![0u8; buf_size];
         // leave the vnet hdr as is
-        pnet_build_packet(&mut buf[10..], mac, payload);
+        pnet_build_packet(
+            &mut buf[10..],
+            src_mac,
+            dst_mac,
+            payload,
+            &packet_src_addr,
+            &packet_dst_addr,
+        );
 
-        assert!(tap.write(&buf[..]).is_ok());
-        assert!(tap.flush().is_ok());
+        println!(
+            "{} [{}]\n[{}] -> [{}]",
+            tap_name, TAP_IP_ADDRESS, packet_src_addr, packet_dst_addr
+        );
+        let socket = UdpSocket::bind(packet_dst_addr).expect("Failed to bind UDP socket");
 
         let (channel_tx, channel_rx) = mpsc::channel();
 
         // We use a separate thread to wait for the test packet because the API exposed by pnet is
         // blocking. This thread will be killed when the main thread exits.
-        let _handle = thread::spawn(move || loop {
-            let buf = rx.next().unwrap();
-            let p = ParsedPkt::new(buf);
-            p.print();
+        let _handle = thread::spawn(move || {
+            assert!(tap.write(&buf[..]).is_ok());
+            assert!(tap.flush().is_ok());
 
-            if let Some(ref udp) = p.udp {
-                if payload == udp.payload() {
-                    channel_tx.send(true).unwrap();
-                    break;
-                }
-            }
+            let mut buf = [0u8; 256];
+            let recv_result = socket.recv_from(&mut buf);
+            println!("RX: {:?}", recv_result);
+            channel_tx.send(true).unwrap();
         });
 
         // We wait for at most SLEEP_MILLIS * SLEEP_ITERS milliseconds for the reception of the
